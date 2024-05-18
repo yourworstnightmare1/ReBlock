@@ -1,4 +1,4 @@
-# ReBlock Compatability
+# ReBlock Compatibility
 This file tells you about the requirements to use ReBlock, although you probably wouldn't need this because literally every Windows 10/11 device in existence could run this.
 
 ## Windows
