@@ -1,5 +1,11 @@
+[![Github All Releases](https://img.shields.io/github/downloads/yourworstnightmare1/ReBlock/total.svg)]()
+
 # Welcome to ReBlock
 Welcome to the official GitHub repository for the ReBlock app across Windows and macOS (Soon™).
+
+<p align "center">
+<img src="https://github.com/yourworstnightmare1/ReBlock/assets/134671973/6d345570-2bef-4d49-ba93-9a50300bdf75" />
+</p>
 
 # What is ReBlock?
 ReBlock is a CLI-based application that allows you to unblock things like apps.
