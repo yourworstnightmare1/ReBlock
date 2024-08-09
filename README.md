@@ -20,4 +20,4 @@ Tools such as [appUnblocker](https://github.com/yourworstnightmare1/appunblocker
 Compatability info available in [COMPATIBILITY.md](https://github.com/yourworstnightmare1/ReBlock/blob/main/COMPATIBILITY.md).
 
 # Installation
-View [Releases](https://github.com/yourworstnightmare1/ReBlock/releases) for all existing releases of ReBlock on Windows and macOS (Soon™), or go to our [official website](https://sites.google.com/view/reblock) to also view releases from there and additional mirrors to install ReBlock from.
+View [Releases](https://github.com/yourworstnightmare1/ReBlock/releases) for all existing releases of ReBlock on Windows and macOS (Soon™), or go to our [official website](https://sites.google.com/view/reblock) to also view releases from there and additional mirrors to install ReBlock from. Click [here](https://github.com/yourworstnightmare1/ReBlock/wiki/Installing-ReBlock) for the install guide.
