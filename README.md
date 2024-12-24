@@ -8,9 +8,8 @@ Welcome to the official GitHub repository for the ReBlock app across Windows and
 </p>
 
 # What is ReBlock?
-ReBlock is a CLI-based application that allows you to unblock things like apps.
+ReBlock is a CLI-based application that is what I call a "soft-jailbreak". It doesn't completely give you access to every part of the OS, but it opens up a lot of parts of it which allows you to do things that weren't intended to be done.
 ![reblock_v1_powershell_preview](https://github.com/yourworstnightmare1/ReBlock/assets/134671973/c634c1e3-c971-41d0-9e45-e1ca9a73cb46)
-We want to allow people like students or people who somehow forget their admin passwords to allow them to regain control of their devices.
 
 # Exploits & Tools
 Tools such as [appUnblocker](https://github.com/yourworstnightmare1/appunblocker) and [packageExpander](https://github.com/yourworstnightmare1/packageexpander) are the base for ReBlock, and there's new stuff coming soon!
