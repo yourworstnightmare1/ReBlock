@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<plugin>
+  <name>hiddenFiles</name>
+  <version>2.0</version>
+  <author>yourworstnightmare1</author>
+  <minWindowsVer>10.0.19041</minWindowsVer>
+  <minMacOSVer>12.0</minMacOSVer>
+  <description>Shows hidden files in Explorer (Windows) or Finder (macOS).</description>
+  <entryScript>hiddenfiles.ps1</entryScript>
+</plugin>

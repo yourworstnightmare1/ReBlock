@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<plugin>
+  <name>packageSpoofer</name>
+  <version>2.0</version>
+  <author>yourworstnightmare1</author>
+  <minWindowsVer>Unsupported</minWindowsVer>
+  <minMacOSVer>12.0</minMacOSVer>
+  <description>Resigns app bundle IDs to allow opening apps blocked by MDM/third-party software.</description>
+  <entryPoints>
+    <entry name="CLI" path="cli/cli.sh" />
+    <entry name="GUI" path="gui/packagespoofer_wrapper.app/packagespoofer.app" />
+  </entryPoints>
+</plugin>

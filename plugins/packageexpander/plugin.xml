@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<plugin>
+  <name>packageExpander</name>
+  <version>1.0</version>
+  <author>yourworstnightmare1</author>
+  <minWindowsVer>Unsupported</minWindowsVer>
+  <minMacOSVer>12.0</minMacOSVer>
+  <description>Extracts package installer payloads to bypass administrator restrictions.</description>
+  <entryScript>packageexpander.sh</entryScript>
+</plugin>
