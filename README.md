@@ -1,4 +1,5 @@
-[![Github All Releases](https://img.shields.io/github/downloads/yourworstnightmare1/ReBlock/total.svg)]()
+[![CI](https://github.com/yourworstnightmare1/ReBlock/actions/workflows/ci.yml/badge.svg)](https://github.com/yourworstnightmare1/ReBlock/actions/workflows/ci.yml)
+[![GitHub all releases](https://img.shields.io/github/downloads/yourworstnightmare1/ReBlock/total.svg)](https://github.com/yourworstnightmare1/ReBlock/releases)
 
 # Welcome to ReBlock
 ReBlock is the best tool for bypassing system restrictions on your Windows or macOS device.
