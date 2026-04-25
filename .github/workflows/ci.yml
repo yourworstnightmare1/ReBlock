@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Bash scripts
+        run: |
+          set -euo pipefail
+          while IFS= read -r -d '' f; do
+            echo "bash -n $f"
+            bash -n "$f"
+          done < <(find . -name '*.sh' -print0)
+
+      - name: Setup PowerShell
+        uses: azure/setup-powershell@v2
+        with:
+          version: '7.4.6'
+
+      - name: Validate PowerShell scripts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ChildItem -Path . -Recurse -Filter *.ps1 -File | ForEach-Object {
+            $path = $_.FullName
+            $errors = $null
+            $tokens = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
+            if ($errors -and $errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Host $_.ToString() }
+              throw "Parse errors in $path"
+            }
+            Write-Host "OK: $path"
+          }
