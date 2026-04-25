@@ -120,14 +120,47 @@ $iconSuccess = "
 Write-Host "Getting version info..." -ForegroundColor Yellow
 
 # Load version from external file so version updates don't require script edits.
-# Use PSScriptRoot first so paths remain stable even when dot-sourcing the script.
-$scriptDir = if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
-    $PSScriptRoot
+# Use multiple fallbacks because invocation context can differ between hosts.
+$scriptDir = $null
+if (-not [string]::IsNullOrWhiteSpace($PSScriptRoot)) {
+    $scriptDir = $PSScriptRoot
+}
+elseif (-not [string]::IsNullOrWhiteSpace($PSCommandPath)) {
+    $scriptDir = Split-Path -Parent $PSCommandPath
+}
+elseif ($MyInvocation -and $MyInvocation.MyCommand -and -not [string]::IsNullOrWhiteSpace($MyInvocation.MyCommand.Path)) {
+    $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 }
 else {
-    Split-Path -Parent $MyInvocation.MyCommand.Path
+    $scriptDir = (Get-Location).Path
+    Write-Host "Could not resolve script path from invocation context. Using current directory." -ForegroundColor Yellow
 }
-$versionFile = Join-Path $scriptDir "version.txt"
+
+# Try multiple candidate roots so compiled launches can still locate packaged assets.
+$candidateRoots = @(
+    $scriptDir,
+    (Join-Path $scriptDir "data"),
+    (Join-Path $scriptDir "ReBlock"),
+    (Get-Location).Path,
+    (Join-Path (Get-Location).Path "data"),
+    (Join-Path (Get-Location).Path "ReBlock")
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
+
+$appRoot = $null
+foreach ($candidate in $candidateRoots) {
+    $candidateVersion = Join-Path $candidate "version.txt"
+    $candidatePlugins = Join-Path $candidate "plugins"
+    if ((Test-Path $candidateVersion) -and (Test-Path $candidatePlugins)) {
+        $appRoot = $candidate
+        break
+    }
+}
+
+if ([string]::IsNullOrWhiteSpace($appRoot)) {
+    $appRoot = $scriptDir
+}
+
+$versionFile = Join-Path $appRoot "version.txt"
 
 if (Test-Path $versionFile) {
     $appVersion = (Get-Content $versionFile -Raw).Trim()
@@ -231,7 +264,31 @@ function Get-CurrentOsInfo {
     $runtime = [System.Runtime.InteropServices.RuntimeInformation]
 
     if ($runtime::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)) {
-        $versionText = [Environment]::OSVersion.Version.ToString()
+        # Do not trust Environment.OSVersion on Windows PowerShell because it can
+        # report legacy versions (for example 6.2 on Windows 10/11).
+        $versionText = ""
+        try {
+            $cv = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -ErrorAction Stop
+            $major = 0
+            $minor = 0
+            if ($null -ne $cv.CurrentMajorVersionNumber -and $null -ne $cv.CurrentMinorVersionNumber) {
+                $major = [int]$cv.CurrentMajorVersionNumber
+                $minor = [int]$cv.CurrentMinorVersionNumber
+            }
+            else {
+                $majorMinor = [Environment]::OSVersion.Version
+                $major = [int]$majorMinor.Major
+                $minor = [int]$majorMinor.Minor
+            }
+
+            $build = if ($cv.CurrentBuildNumber) { [int]$cv.CurrentBuildNumber } else { [int][Environment]::OSVersion.Version.Build }
+            $ubr = if ($null -ne $cv.UBR) { [int]$cv.UBR } else { 0 }
+            $versionText = "$major.$minor.$build.$ubr"
+        }
+        catch {
+            $versionText = [Environment]::OSVersion.Version.ToString()
+        }
+
         return [PSCustomObject]@{
             Platform = "Windows"
             VersionText = $versionText
@@ -327,13 +384,28 @@ function Start-PluginEntry {
         [string]$Platform
     )
 
+    $previousLocation = Get-Location
+    if (-not [string]::IsNullOrWhiteSpace($WorkingDirectory) -and (Test-Path $WorkingDirectory)) {
+        Set-Location $WorkingDirectory
+    }
+
+    try {
     if ($Platform -eq "Windows") {
         if ($EntryPath -match "\.ps1$") {
-            Start-Process powershell -ArgumentList @(
-                "-NoProfile",
-                "-ExecutionPolicy", "Bypass",
-                "-File", "`"$EntryPath`""
-            ) -WorkingDirectory $WorkingDirectory
+            # Run in current PowerShell instance to keep a single window.
+            & $EntryPath
+            if (-not $?) {
+                throw "Plugin PowerShell script failed: $EntryPath"
+            }
+            return
+        }
+
+        if ($EntryPath -match "\.bat$") {
+            # Run in current console window.
+            & cmd.exe /c "`"$EntryPath`""
+            if ($LASTEXITCODE -ne 0) {
+                throw "Plugin batch script failed with exit code ${LASTEXITCODE}: $EntryPath"
+            }
             return
         }
 
@@ -348,7 +420,11 @@ function Start-PluginEntry {
         }
 
         if ($EntryPath -match "\.sh$") {
-            Start-Process -FilePath "bash" -ArgumentList @("`"$EntryPath`"") -WorkingDirectory $WorkingDirectory
+            # Run in current terminal/session.
+            & bash $EntryPath
+            if ($LASTEXITCODE -ne 0) {
+                throw "Plugin shell script failed with exit code ${LASTEXITCODE}: $EntryPath"
+            }
             return
         }
 
@@ -356,7 +432,35 @@ function Start-PluginEntry {
         return
     }
 
+    if ($EntryPath -match "\.ps1$") {
+        & $EntryPath
+        if (-not $?) {
+            throw "Plugin PowerShell script failed: $EntryPath"
+        }
+        return
+    }
+
+    if ($EntryPath -match "\.sh$") {
+        & bash $EntryPath
+        if ($LASTEXITCODE -ne 0) {
+            throw "Plugin shell script failed with exit code ${LASTEXITCODE}: $EntryPath"
+        }
+        return
+    }
+
+    if ($EntryPath -match "\.bat$") {
+        & cmd.exe /c "`"$EntryPath`""
+        if ($LASTEXITCODE -ne 0) {
+            throw "Plugin batch script failed with exit code ${LASTEXITCODE}: $EntryPath"
+        }
+        return
+    }
+
     Start-Process -FilePath $EntryPath -WorkingDirectory $WorkingDirectory
+    }
+    finally {
+        Set-Location $previousLocation
+    }
 }
 
 function Show-PluginMenu {
@@ -367,7 +471,7 @@ function Show-PluginMenu {
     $plugins = @(Get-PluginMetadata -PluginRoot $PluginRoot)
     if ($plugins.Count -eq 0) {
         Write-Host "No plugins detected in $PluginRoot" -ForegroundColor Yellow
-        return
+        return $false
     }
 
     Write-Host ""
@@ -384,7 +488,7 @@ function Show-PluginMenu {
         $selection = Read-Host "Choose plugin number"
 
         if ($selection -eq "X" -or $selection -eq "x") {
-            return
+            return $false
         }
 
         if ($selection -match "^\d+$") {
@@ -442,8 +546,16 @@ function Show-PluginMenu {
                 }
 
                 Write-Host "Launching $($selectedPlugin.Name) [$($chosenEntryPoint.Name)]..." -ForegroundColor Green
-                Start-PluginEntry -EntryPath $chosenEntryPoint.Path -WorkingDirectory $selectedPlugin.Directory -Platform $osInfo.Platform
-                return
+                try {
+                    Start-PluginEntry -EntryPath $chosenEntryPoint.Path -WorkingDirectory $selectedPlugin.Directory -Platform $osInfo.Platform
+                    return $true
+                }
+                catch {
+                    Show-ErrorMessage -Message "ERROR: Failed to run plugin."
+                    Write-Host $_.Exception.Message -ForegroundColor Yellow
+                    Write-Host "Returning to the main menu..." -ForegroundColor Yellow
+                    return $false
+                }
             }
         }
 
@@ -451,28 +563,37 @@ function Show-PluginMenu {
     } while ($true)
 }
 
-Clear-Host
+function Show-MainMenu {
+    param (
+        [string]$Version
+    )
 
-Write-Host "$iconReBlock" -ForegroundColor Red
-Write-Host "Welcome to ReBlock!" -ForegroundColor Red
-Write-Host "Version $appVersion" -ForegroundColor Yellow
-Write-Host "Created & Programmed by yourworstnightmare1"
-Write-Host "___________________________________________"
-Write-Host ""
-Write-Host "Choose an option:" -ForegroundColor Cyan
-Write-Host "[1] Select a Plugin"
-Write-Host "[2] Go to ReBlock website"
-Write-Host "[3] Go to GitHub"
-Write-Host "[4] Exit"
-Write-Host ""
+    Clear-Host
+    Write-Host "$iconReBlock" -ForegroundColor Red
+    Write-Host "Welcome to ReBlock!" -ForegroundColor Red
+    Write-Host "Version $Version" -ForegroundColor Yellow
+    Write-Host "Created & Programmed by yourworstnightmare1"
+    Write-Host "___________________________________________"
+    Write-Host ""
+    Write-Host "Choose an option:" -ForegroundColor Cyan
+    Write-Host "[1] Select a Plugin"
+    Write-Host "[2] Go to ReBlock website"
+    Write-Host "[3] Go to GitHub"
+    Write-Host "[4] Exit"
+    Write-Host ""
+}
 
-$pluginsRoot = Join-Path $scriptDir "plugins"
+$pluginsRoot = Join-Path $appRoot "plugins"
 
 do {
+    Show-MainMenu -Version $appVersion
     $choice = Read-Host "Enter 1-4"
     switch ($choice) {
         "1" {
-            Show-PluginMenu -PluginRoot $pluginsRoot
+            $pluginLaunched = Show-PluginMenu -PluginRoot $pluginsRoot
+            if ($pluginLaunched) {
+                exit
+            }
         }
         "2" {
             Start-Process "https://sites.google.com/view/reblock"
