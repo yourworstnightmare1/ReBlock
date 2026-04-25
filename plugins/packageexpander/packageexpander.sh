@@ -48,8 +48,15 @@ ICON_REBLOCK_STYLE='
                                                                      
 '
 
-APP_VERSION="1.0"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VERSION_FILE="$SCRIPT_DIR/version.txt"
+
+if [[ -f "$VERSION_FILE" ]]; then
+    APP_VERSION="$(tr -d '\r' < "$VERSION_FILE" | xargs)"
+else
+    APP_VERSION="0.0.0"
+    echo -e "${YELLOW}version.txt not found. Using fallback version 0.0.0.${NC}"
+fi
 
 strip_wrapping_quotes() {
     local s="$1"
