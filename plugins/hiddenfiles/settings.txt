@@ -1,0 +1,31 @@
+﻿# Plugin settings config
+# hiddenFiles
+showPluginBanner=1
+# 0 = disabled, 1 = enabled (default)
+# Shows the hiddenFiles ASCII banner when the plugin launches.
+restartExplorer=1
+# 0 = disabled, 1 = enabled (default)
+# Restarts Windows Explorer automatically after changing hidden file visibility.
+
+# Updater
+updaterUrlStable=
+# This plugin's updater URL. ReBlock will use this URL when it checks for updates on startup.
+updaterUrlCanary=
+# This plugin's pre-release updater URL. This will be used when "Enable Pre-Release Plugin Updates" is set to [Enabled].
+enablePreReleasePluginUpdates=0
+# 0 = disabled (default), 1 = enabled
+# Will use the plugin's pre-release updater URL instead of the stable one.
+
+# Security
+enableNetworkAccess=1
+# 0 = disabled, 1 = enabled, 2 = ask on first time (default), 3 = ask each time
+# Enables/disables this plugin's ability to have network access.
+enableFileAccess=1
+# 0 = disabled, 1 = enabled (default), 2 = ask on first time, 3 = ask each time
+# Enables/disables this plugin's ability to access files outside of its plugin folder.
+enableRootAccess=0
+# 0 = disabled (default), 1 = enabled, 2 = ask on first time, 3 = ask each time, 4 = enabled using appUnblocker
+# Choose whether or not this plugin is launched with administrator. If [enabled using appUnblocker] is enabled, it will do the same as [Enabled], but use appUnblocker to elevate the permissions of the application even if the user does not have access to elevated permissions.
+forcePlatformCompatibility=0
+# 0 = disabled (default), 1 = force Windows compatibility, 2 = force macOS compatibility
+# Will force the plugin to run on a specific platform, even if the plugin is unsupported on the current platform.

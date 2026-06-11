@@ -74,7 +74,36 @@ function Get-MacHiddenFilesState {
     return $value -in @("1", "true", "yes")
 }
 
+function Get-PluginSettingsValue {
+    param (
+        [string]$SettingsPath,
+        [string]$Key,
+        [string]$Default = "0"
+    )
+
+    if (-not (Test-Path $SettingsPath)) {
+        return $Default
+    }
+
+    foreach ($line in Get-Content -Path $SettingsPath) {
+        if ($line -match '^\s*#' -or [string]::IsNullOrWhiteSpace($line)) {
+            continue
+        }
+        if ($line -match '^\s*([^=]+)=(.*)$') {
+            if ($matches[1].Trim() -eq $Key) {
+                return $matches[2].Trim()
+            }
+        }
+    }
+
+    return $Default
+}
+
 function Restart-WindowsExplorer {
+    if ($script:RestartExplorerSetting -ne "1") {
+        return
+    }
+
     Get-Process explorer -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 400
     Start-Process explorer.exe
@@ -295,11 +324,17 @@ else {
     $appVersion = "0.0.0"
 }
 
+$settingsFile = Join-Path $scriptDir "settings.txt"
+$script:ShowPluginBanner = Get-PluginSettingsValue -SettingsPath $settingsFile -Key "showPluginBanner" -Default "1"
+$script:RestartExplorerSetting = Get-PluginSettingsValue -SettingsPath $settingsFile -Key "restartExplorer" -Default "1"
+
 $platform = Get-PlatformName
 
 do {
     Clear-Host
-    Write-Host "$iconHiddenFiles" -ForegroundColor Red
+    if ($script:ShowPluginBanner -eq "1") {
+        Write-Host "$iconHiddenFiles" -ForegroundColor Red
+    }
     Write-Host "Welcome to hiddenFiles!" -ForegroundColor Red
     Write-Host "Version $appVersion" -ForegroundColor Yellow
     Write-Host "Created & Programmed by yourworstnightmare1"

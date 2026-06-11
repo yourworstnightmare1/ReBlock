@@ -1,0 +1,20 @@
+name: Notify ReBlock plugin sync
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - hiddenfiles.ps1
+      - version.txt
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REBLOCK_SYNC_TOKEN }}
+          repository: yourworstnightmare1/reblock
+          event-type: sync-plugin
+          client-payload: >-
+            {"plugin":"hiddenfiles"}

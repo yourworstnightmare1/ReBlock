@@ -1,0 +1,63 @@
+{
+  "plugins": [
+    {
+      "id": "appUnblocker",
+      "folder": "appunblocker",
+      "repo": "yourworstnightmare1/appUnblocker",
+      "syncMode": "release",
+      "cliAssetPattern": "appunblocker-*-cli.zip",
+      "preserve": ["settings.txt", "plugin.xml"],
+      "gui": {
+        "windows": {
+          "assetPattern": "appunblocker-*-win-*-gui.zip",
+          "destination": "gui/win",
+          "flatten": true
+        },
+        "macos": {
+          "assetPattern": "appunblocker-*-macos-*-gui.zip",
+          "destination": "gui/macos",
+          "pick": "*.app"
+        }
+      }
+    },
+    {
+      "id": "packageExpander",
+      "folder": "packageexpander",
+      "repo": "yourworstnightmare1/packageExpander",
+      "syncMode": "release",
+      "cliAssetPattern": "packageexpander-*-cli.zip",
+      "preserve": ["settings.txt", "plugin.xml"],
+      "gui": {
+        "macos": {
+          "assetPattern": "packageexpander-*-gui.zip",
+          "destination": "gui",
+          "pick": "*.app"
+        }
+      }
+    },
+    {
+      "id": "packageSpoofer",
+      "folder": "packagespoofer",
+      "repo": "yourworstnightmare1/packageSpoofer",
+      "syncMode": "release",
+      "cliAssetPattern": "packagespoofer-*-cli.zip",
+      "preserve": ["settings.txt", "plugin.xml"],
+      "gui": {
+        "macos": {
+          "assetPattern": "packagespoofer-*-gui.zip",
+          "destination": "gui",
+          "pick": "*.app"
+        }
+      }
+    },
+    {
+      "id": "hiddenfiles",
+      "folder": "hiddenfiles",
+      "repo": "yourworstnightmare1/hiddenfiles",
+      "syncMode": "branch",
+      "branch": "main",
+      "syncFiles": ["hiddenfiles.ps1", "version.txt"],
+      "preserve": ["settings.txt", "plugin.xml"]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+﻿# Settings config file
+# ReBlock
+showUnsupportedPlugins=1
+# 0 = disabled, 1 = enabled (default)
+# Shows plugins that are not supported on the current system.
+showNotInstalled=0
+# 0 = disabled (default), 1 = enabled
+# Shows official ReBlock plugins, even when they are not currently installed. They will be labeled as [Not Installed] and you will be asked to install.
+allowPluginEditions=1
+# 0 = disabled, 1 = enabled (default)
+# Enables both CLI and GUI editions of a plugin to be chosen when it is available for that specific plugin.
+showArtwork=1
+# 0 = disabled, 1 = enabled (default)
+# Enables ASCII artwork. If you're on a low end device, disabling this may improve performance.
+enableColor=1
+# 0 = disabled, 1 = enabled (default)
+# Gives color to all text and art.
+onlyLoadOfficialPlugins=0
+# 0 = disabled (default), 1 = enabled (default)
+# Only allows plugins from author "yourworstnightmare1" to be detected by ReBlock.
+
+# Updater
+# Looking for plugin-specific options? Go to /plugins and open your desired plugin's folder and edit its updater section inside settings.txt.
+enableUnsupportedPluginUpdates=0
+# 0 = disabled (default), 1 = enabled
+# Will check unsupported plugins for updates even though they can't be used on your system.
+enablePreReleasePluginUpdates=0
+# 0 = disabled (default), 1 = enabled
+# Will use the plugin's pre-release updater URL instead of the stable one.
+reblockEnablePreReleasePluginUpdates=0
+# 0 = disabled (default), 1 = enabled
+# Will update ReBlock using pre-release versions instead of stable versions.
+reblockUpdaterUrl=1
+# 0 = updates disabled, 1 = GitHub, 2 = ReBlock API
+# Decides the update server used to update ReBlock.

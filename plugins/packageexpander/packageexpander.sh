@@ -1,270 +1,143 @@
 #!/bin/bash
 
-# packageExpander — automates the manual pkg expand + Payload extract flow (macOS).
-
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
+# To apply colors use echo -e
+# Make sure to remove colors with ${NC}
 
-ICON_REBLOCK_STYLE='
-                                                                     
-                                                                     
-                                                                     
-                =====================================                
-            =============================================            
-         ===================================================         
-        =====================================================        
-       =======================================================       
-      ===========================-::===========================      
-      =======================-.       .:=======================      
-      ====================..             ..====================      
-      ================-.                     .-================      
-      =============:.                           .:=============      
-      ==============:.                         ..==============      
-      ===========.-====-.                   .-=====.===========      
-      ===========.  .-===+=..           ..=+===-.   ===========      
-      ===========.     .:===+=:.     .:=+===:.      ===========      
-      ===========.         .====+-.-+====.          ===========      
-      ===========.            .-=====-.             ===========      
-      ===========.               ===                ==========+      
-      ===========.               ===                ==========+      
-      ++++++++++=.               =+=                =++++++++++      
-      ++++++++++=.               =+=                =++++++++++      
-      +++++++++++:               =+=               :+++++++++++      
-      +++++++++++++:.            =+=            .:+++++++++++++      
-      ++++++++++++++++=.         =+=         .-++++++++++++++++      
-      ++++++++++++++++++++..     =+=     ..=+++++++++++++++++++      
-      +++++++++++++++++++++++-.  =+=  .-+++++++++++++++++++++++      
-      ++++++++++++++++++++++++++==+==++++++++++++++++++++++++++      
-       +++++++++++++++++++++++++++++++++++++++++++++++++++++++       
-        +++++++++++++++++++++++++++++++++++++++++++++++++++++        
-         +++++++++++++++++++++++++++++++++++++++++++++++++++         
-           +++++++++++++++++++++++++++++++++++++++++++++++           
-                ++++++++++++++++++++++++++++++++++++++               
-                                                                     
-                                                                     
-'
+version=1.0
+build=1
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-VERSION_FILE="$SCRIPT_DIR/version.txt"
-
-if [[ -f "$VERSION_FILE" ]]; then
-    APP_VERSION="$(tr -d '\r' < "$VERSION_FILE" | xargs)"
-else
-    APP_VERSION="0.0.0"
-    echo -e "${YELLOW}version.txt not found. Using fallback version 0.0.0.${NC}"
-fi
-
-strip_wrapping_quotes() {
-    local s="$1"
-    s="${s%\"}"
-    s="${s#\"}"
-    s="${s%\'}"
-    s="${s#\'}"
-    echo "$s"
-}
-
-# read -r keeps backslashes; users often paste terminal-style "Install\ FL\ Studio.pkg".
-normalize_path_input() {
-    local s
-    s="$(strip_wrapping_quotes "$1")"
-    s="${s//\\ / }"
-    echo "$s"
-}
-
-expand_pkg_flow() {
-    echo ""
-    echo -e "${BOLD}Expand a .pkg installer${NC}"
-    echo -e "${CYAN}Step 1 of 4:${NC} Path to your .pkg (e.g. ${YELLOW}~/Desktop/My App.pkg${NC}). Finder paths and terminal-style backslashes before spaces both work."
-    read -r -p "Package path: " pkg_raw
-    local pkg
-    pkg="$(normalize_path_input "$pkg_raw")"
-    pkg="${pkg/#\~/$HOME}"
-    pkg="${pkg%/}"
-
-    if [[ -z "$pkg" ]]; then
-        echo -e "${RED}Error: Package path is required.${NC}"
-        read -r -p "Press Enter to return to the menu..."
-        return
-    fi
-    if [[ ! -f "$pkg" ]] && [[ ! -d "$pkg" ]]; then
-        echo -e "${RED}Error: Not found: $pkg${NC}"
-        read -r -p "Press Enter to return to the menu..."
-        return
-    fi
-
-    echo ""
-    echo -e "${CYAN}Step 2 of 4:${NC} Folder where the extracted payload should go (must be empty or new)."
-    read -r -p "Output folder: " out_raw
-    local outdir
-    outdir="$(normalize_path_input "$out_raw")"
-    outdir="${outdir/#\~/$HOME}"
-    outdir="${outdir%/}"
-
-    if [[ -z "$outdir" ]]; then
-        echo -e "${RED}Error: Output folder is required.${NC}"
-        read -r -p "Press Enter to return to the menu..."
-        return
-    fi
-    if [[ -e "$outdir" ]] && [[ -n "$(ls -A "$outdir" 2>/dev/null)" ]]; then
-        echo -e "${RED}Error: Output folder exists and is not empty. Choose an empty or new folder.${NC}"
-        read -r -p "Press Enter to return to the menu..."
-        return
-    fi
-    mkdir -p "$outdir" || {
-        echo -e "${RED}Error: Could not create output folder.${NC}"
-        read -r -p "Press Enter to return to the menu..."
-        return
-    }
-
-    # pkgutil --expand requires DIR to not exist yet (it creates DIR).
-    local expand_root="/tmp/packageexpander.${PPID}.${RANDOM}.${RANDOM}"
-    while [[ -e "$expand_root" ]]; do
-        expand_root="/tmp/packageexpander.${PPID}.${RANDOM}.${RANDOM}"
-    done
-
-    echo ""
-    echo -e "${CYAN}Step 3 of 4:${NC} Running ${BOLD}pkgutil --expand${NC} (same as the manual guide)..."
-    echo -e "${YELLOW}pkgutil --expand \"$pkg\" \"$expand_root\"${NC}"
-    if ! pkgutil --expand "$pkg" "$expand_root"; then
-        echo -e "${RED}Error: pkgutil --expand failed.${NC}"
-        rm -rf "$expand_root"
-        read -r -p "Press Enter to return to the menu..."
-        return
-    fi
-
-    echo ""
-    echo -e "${CYAN}Step 4 of 4:${NC} Locating ${BOLD}Payload${NC} inside the expanded package..."
-    local payloads=()
+DEFAULT_METHOD=1
+SETTINGS_FILE="$SCRIPT_DIR/settings.txt"
+if [[ -f "$SETTINGS_FILE" ]]; then
     while IFS= read -r line; do
-        [[ -n "$line" ]] && payloads+=("$line")
-    done < <(find "$expand_root" \( -name Payload -o -name payload \) -type f 2>/dev/null)
-
-    if [[ ${#payloads[@]} -eq 0 ]]; then
-        echo -e "${RED}Error: No Payload file found after expand. This .pkg layout may need manual steps (option 2).${NC}"
-        rm -rf "$expand_root"
-        read -r -p "Press Enter to return to the menu..."
-        return
-    fi
-
-    local chosen="${payloads[0]}"
-    if [[ ${#payloads[@]} -gt 1 ]]; then
-        echo -e "${YELLOW}Multiple Payload files found. Pick one:${NC}"
-        local i
-        for i in "${!payloads[@]}"; do
-            echo "[$((i + 1))] ${payloads[$i]}"
-        done
-        echo "[X] Cancel"
-        echo ""
-        while true; do
-            read -r -p "Choose Payload number: " pick
-            if [[ "$pick" == [Xx] ]]; then
-                rm -rf "$expand_root"
-                echo "Cancelled."
-                read -r -p "Press Enter to return to the menu..."
-                return
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "$line" ]] && continue
+        if [[ "$line" =~ ^[[:space:]]*([^=]+)=(.*)$ ]]; then
+            key="$(echo "${BASH_REMATCH[1]}" | xargs)"
+            value="$(echo "${BASH_REMATCH[2]}" | xargs)"
+            if [[ "$key" == "defaultMethod" ]]; then
+                DEFAULT_METHOD="$value"
             fi
-            if [[ "$pick" =~ ^[0-9]+$ ]] && (( pick >= 1 && pick <= ${#payloads[@]} )); then
-                chosen="${payloads[$((pick - 1))]}"
-                break
-            fi
-            echo -e "${RED}Invalid choice. Enter a valid number or X.${NC}"
-        done
-    fi
-
-    echo -e "${YELLOW}tar -xvf \"$chosen\" -C \"$outdir\"${NC}"
-    if tar -xvf "$chosen" -C "$outdir"; then
-        echo ""
-        echo -e "${GREEN}Done. Payload extracted to:${NC}"
-        echo "  $outdir"
-        echo -e "${GREEN}You can open the folder in Finder from the menu, or open your app from there.${NC}"
-    else
-        echo ""
-        echo -e "${YELLOW}tar failed (some Apple payloads are gzip+cpio, not plain tar). Trying gzip | cpio...${NC}"
-        if gzip -dc "$chosen" 2>/dev/null | (cd "$outdir" && cpio -idm 2>/dev/null); then
-            echo -e "${GREEN}Extracted with gzip | cpio.${NC}"
-            echo "  $outdir"
-        else
-            echo -e "${RED}Automatic extraction failed. Use option 2 for manual steps, or inspect:${NC}"
-            echo "  $expand_root"
-            rm -rf "$expand_root"
-            read -r -p "Press Enter to return to the menu..."
-            return
         fi
-    fi
-
-    rm -rf "$expand_root"
-    echo ""
-    read -r -p "Open output folder in Finder? [y/N]: " openf
-    if [[ "$openf" == [yY] ]]; then
-        open "$outdir"
-    fi
-    read -r -p "Press Enter to return to the menu..."
-}
-
-manual_instructions() {
-    clear
-    echo -e "${BOLD}packageExpander: the manual way${NC}"
-    echo "This is how to do the same thing without this script."
-    echo ""
-    echo -e "${CYAN}Step 1:${NC} Get the path to your .pkg (Get Info → Where). Use form ${YELLOW}/path/to/Installer.pkg${NC} or ${YELLOW}~/Desktop/Installer.pkg${NC}."
-    echo "Pick a ${BOLD}new empty folder${NC} path for the expand step — ${BOLD}delete the folder if it already exists${NC}, or pkgutil can fail."
-    echo ""
-    echo -e "${CYAN}Step 2:${NC} In Terminal:"
-    echo -e "  ${YELLOW}pkgutil --expand /your/app.pkg /folder/for/expand${NC}"
-    echo "The second path must ${BOLD}not${NC} exist yet (or remove it first)."
-    echo ""
-    echo -e "${CYAN}Step 3:${NC} Open the new folder. If you see another .pkg, use Show Package Contents and locate the file named ${BOLD}Payload${NC}. Note its full path."
-    echo ""
-    echo -e "${CYAN}Step 4:${NC} Create a folder where you want the app files, then:"
-    echo -e "  ${YELLOW}tar -xvf /path/to/Payload -C /path/to/output/folder${NC}"
-    echo "(If tar errors, the payload may be gzip+cpio — search for cpio extraction for your macOS version.)"
-    echo ""
-    echo -e "${CYAN}Step 5:${NC} Open the output folder; your app should be there."
-    echo ""
-    read -r -p "Press Enter to return to the menu..."
-}
-
-main_menu() {
-    while true; do
-        clear
-        echo -e "${RED}${ICON_REBLOCK_STYLE}${NC}"
-        echo -e "${RED}Welcome to packageExpander!${NC}"
-        echo -e "${YELLOW}Version $APP_VERSION${NC}"
-        echo "Created & Programmed by yourworstnightmare1"
-        echo "___________________________________________"
-        echo ""
-        echo -e "${CYAN}Choose an option:${NC}"
-        echo "[1] Expand a .pkg installer (automated)"
-        echo "[2] View manual instructions"
-        echo "[3] Exit"
-        echo ""
-        read -r -p "Enter 1-3: " choice
-        case "$choice" in
-            1)
-                expand_pkg_flow
-                ;;
-            2)
-                manual_instructions
-                ;;
-            3)
-                echo -e "${YELLOW}Goodbye!${NC}"
-                exit 0
-                ;;
-            *)
-                echo -e "${RED}Invalid choice. Please enter 1, 2, or 3.${NC}"
-                sleep 1
-                ;;
-        esac
-    done
-}
-
-if ! command -v pkgutil >/dev/null 2>&1; then
-    echo -e "${RED}packageExpander requires macOS pkgutil.${NC}"
-    exit 1
+    done < "$SETTINGS_FILE"
 fi
 
-main_menu
+mainIcon='                                    
+                                 ::                         
+                          ---::::::::::  ---                
+                     ::::::---::::::::::------              
+                :::::::::::----:::::::----------:           
+          :::::::::::::::::-----::::--------------:::       
+     -----:::::::::::::::::------------------------:::::    
+     =-----:::::::::::::::--=========---------------::::::: 
+      =----::::::::::------=============------------::::::--
+       =---::::------------==========----==---------::::--- 
+        ===----------------=====----==========------:::-=   
+     -----===-----------------===================---:---    
+  -----------==------------=======================++=-      
++======--------===---------===================++++=====     
+ +======----------==-------===============+++===========    
+   ++====-----------==-----==========++==================   
+     +====-------------+---=====++========================  
+       +===--------------==++============================== 
+         #*==-----------+**+==============================  
+         ###*==-----+**#*****=====================+**=      
+         #**##*++*####********+==============++*#####       
+         #***#######***********+=========++**####****       
+         #*****###*************#*+===++*#####********       
+         ##*********************#***#####************       
+           ##*********************###****************       
+              #***********************************#         
+                #****************************##             
+                  ##*********************#                  
+                    #*****************#                     
+                      ##**********                          
+                        #*****                              
+'
+clear
+# Main menu
+echo -e "${RED}$mainIcon${NC}"
+echo -e "${RED}Welcome to packageExpander!${NC}"
+echo -e "${YELLOW}v$version | Build $build${NC}"
+echo -e "Created by yourworstnightmare1"
+read -rp "Press any key to continue..."
+
+clear
+echo -e "To start, we need some info."
+echo -e "\n${BOLD}Supported file types: pkg${NC}"
+read -rp "Enter the directory of your package file: " pkgdir
+read -rp "Enter the extraction location: " extractdir
+
+echo -e "\nChoose the method you want to use:\n\n"
+echo -e "${BOLD}[1] Payload Extraction (Recommended) (Default)${NC}"
+echo -e "packageExpander will extract the package and then extract the payload file containing the main content of the installer. This is the default method for 95% of macOS applications and you will rarely need to use something different."
+echo -e "${BOLD}[2] Package Extraction${NC}"
+echo -e "packageExpander will only extract the package and then extract any .app files inside, as this type of installer doesn't use a payload. This is very rarely used."
+
+read -rp "Choice: " method
+method="${method:-$DEFAULT_METHOD}"
+case "$method" in
+    1)
+        # Method 1: Payload Extraction
+        method=1
+        ;;
+    2)
+        # Method 2: Package Extraction
+        method=2
+        ;;
+    *)
+        echo "Invalid choice"
+        ;;
+esac
+
+echo -e "This is the info provided:"
+echo -e "Package directory: $pkgdir"
+echo -e "Extraction directory: $extractdir"
+echo -e "Method: $method"
+read -rp "Press any key to confirm and proceed..." -n1 -s
+
+# packageExpander
+
+clear
+echo -e "${BOLD}Starting...${NC}"
+echo -e "///////////////////////////////////"
+echo -e "//////  packageExpander 1.0  //////"
+echo -e "//////      Developed by     //////"
+echo -e "//////  yourworstnightmare1  //////"
+echo -e "///////////////////////////////////"
+
+if [ -d "$pkgdir" ] && { [ -f "$pkgdir/Payload" ] || [ -f "$pkgdir/PackageInfo" ]; }; then
+    tmpdir="$pkgdir"
+    echo -e "${GREEN}Package is already expanded; using it directly.${NC}"
+else
+    tmpdir="$(dirname "$pkgdir")/$(basename "$pkgdir" .pkg)"
+    echo -e "Extracting package..."
+    pkgutil --expand "$pkgdir" "$tmpdir" || { echo -e "${RED}Failed to expand package. Try running with sudo.${NC}"; exit 1; }
+    echo -e "${GREEN}Package extracted to temporary folder.${NC}"
+fi
+
+if [ "$method" -eq 1 ]; then
+    echo -e "Extracting payload to $extractdir..."
+    find "$tmpdir" -name "Payload" -exec sh -c 'tar -xf "$1" -C "$2"' _ {} "$extractdir" \;
+    echo -e "${GREEN}Payload extracted.${NC}"
+elif [ "$method" -eq 2 ]; then
+    echo -e "Extracting .app files..."
+    find "$tmpdir" -name "*.app" -exec cp -R "{}" "$extractdir" \;
+    echo -e "${GREEN}.app files extracted.${NC}"
+fi
+
+echo -e "${GREEN}Done!${NC}"
+if [ "$tmpdir" != "$pkgdir" ]; then
+    echo -e "Cleaning up temporary files..."
+    rm -rf "$tmpdir"
+    echo -e "${GREEN}Temporary files removed.${NC}"
+fi
+echo -e "Successfully extracted to $extractdir. You should see a folder or app in the folder at that path."
+read -rp "Press any key to exit..." -n1 -s

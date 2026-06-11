@@ -11,6 +11,25 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
+function Import-BuildPluginGuiAssets {
+    param(
+        [string]$RepoRoot,
+        [string]$OutputPluginsRoot,
+        [string]$PlatformName
+    )
+
+    $helpersPath = Join-Path $RepoRoot "scripts\OfficialPlugins.ps1"
+    $manifestPath = Join-Path $RepoRoot "scripts\official-plugins.json"
+    if (-not (Test-Path $helpersPath) -or -not (Test-Path $manifestPath)) {
+        Write-Warning "Official plugin helper scripts were not found. Skipping GUI asset fetch."
+        return
+    }
+
+    . $helpersPath
+    Write-Host "Fetching official plugin GUI assets for $PlatformName..."
+    Import-OfficialPluginGuiAssets -PluginsRoot $OutputPluginsRoot -Platform $PlatformName -ManifestPath $manifestPath
+}
+
 function Copy-IfExists {
     param(
         [string]$Source,
@@ -115,7 +134,9 @@ function Invoke-WindowsPackaging {
     New-Item -ItemType Directory -Path $appRoot -Force | Out-Null
     Copy-IfExists -Source (Join-Path $RepoRoot "reblock.ps1") -Destination $appRoot
     Copy-IfExists -Source (Join-Path $RepoRoot "version.txt") -Destination $appRoot
+    Copy-IfExists -Source (Join-Path $RepoRoot "settings.txt") -Destination $appRoot
     Copy-IfExists -Source (Join-Path $RepoRoot "plugins") -Destination $appRoot
+    Import-BuildPluginGuiAssets -RepoRoot $RepoRoot -OutputPluginsRoot (Join-Path $appRoot "plugins") -PlatformName "Windows"
     Copy-IfExists -Source (Join-Path $RepoRoot "README.md") -Destination $appRoot
     Copy-IfExists -Source (Join-Path $RepoRoot "LICENSE") -Destination $appRoot
 
@@ -192,7 +213,9 @@ function Invoke-MacOSPackaging {
 
     Copy-IfExists -Source (Join-Path $RepoRoot "reblock.ps1") -Destination $payloadRoot
     Copy-IfExists -Source (Join-Path $RepoRoot "version.txt") -Destination $payloadRoot
+    Copy-IfExists -Source (Join-Path $RepoRoot "settings.txt") -Destination $payloadRoot
     Copy-IfExists -Source (Join-Path $RepoRoot "plugins") -Destination $payloadRoot
+    Import-BuildPluginGuiAssets -RepoRoot $RepoRoot -OutputPluginsRoot (Join-Path $payloadRoot "plugins") -PlatformName "macOS"
     Copy-IfExists -Source (Join-Path $RepoRoot "README.md") -Destination $payloadRoot
     Copy-IfExists -Source (Join-Path $RepoRoot "LICENSE") -Destination $payloadRoot
 
@@ -271,16 +294,14 @@ Push-Location $repoRoot
 try {
     Invoke-Validation -RepoRoot $repoRoot -SkipPowerShell:$SkipPowerShellValidation.IsPresent -SkipBash:$SkipBashValidation.IsPresent
 
-    $runtime = [System.Runtime.InteropServices.RuntimeInformation]
-    $isWindows = $runtime::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
-    $isMacOS = $runtime::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::OSX)
-
-    if ($isWindows) {
+    if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [System.Runtime.InteropServices.OSPlatform]::Windows)) {
         $effectiveOutputDir = if ([string]::IsNullOrWhiteSpace($OutputDir)) { ".dist/windows" } else { $OutputDir }
         $releaseRoot = Join-Path $repoRoot $effectiveOutputDir
         Invoke-WindowsPackaging -RepoRoot $repoRoot -ReleaseRoot $releaseRoot -DoClean:$Clean.IsPresent -DoBuildExe:$BuildExe.IsPresent -DoZip:$Zip.IsPresent
     }
-    elseif ($isMacOS) {
+    elseif ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
+            [System.Runtime.InteropServices.OSPlatform]::OSX)) {
         $effectiveOutputDir = if ([string]::IsNullOrWhiteSpace($OutputDir)) { ".dist/macos" } else { $OutputDir }
         $releaseRoot = Join-Path $repoRoot $effectiveOutputDir
         Invoke-MacOSPackaging -RepoRoot $repoRoot -ReleaseRoot $releaseRoot -DoClean:$Clean.IsPresent -DoArchive:$Archive.IsPresent

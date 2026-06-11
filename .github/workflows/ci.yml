@@ -20,9 +20,9 @@ jobs:
           done < <(find . -name '*.sh' -print0)
 
       - name: Setup PowerShell
-        uses: azure/setup-powershell@v2
+        uses: PSModule/install-powershell@v1
         with:
-          version: '7.4.6'
+          Version: '7.4.6'
 
       - name: Validate PowerShell scripts
         shell: pwsh

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <plugin>
   <name>appUnblocker</name>
   <version>4.0</version>
@@ -6,5 +6,9 @@
   <minWindowsVer>10.0.19041</minWindowsVer>
   <minMacOSVer>12.0</minMacOSVer>
   <description>Opens apps without UAC prompts (Windows) or force opens apps from unidentified developers (macOS).</description>
-  <entryScript>appunblocker.ps1</entryScript>
+  <entryPoints>
+    <entry name="CLI" path="appunblocker.ps1" />
+    <entry name="GUI" path="gui/win/appUnblocker.exe" />
+    <entry name="GUI" path="gui/macos/appUnblocker.app" />
+  </entryPoints>
 </plugin>

@@ -8,6 +8,6 @@
   <description>Resigns app bundle IDs to allow opening apps blocked by MDM/third-party software.</description>
   <entryPoints>
     <entry name="CLI" path="cli/cli.sh" />
-    <entry name="GUI" path="gui/packagespoofer_wrapper.app/packagespoofer.app" />
+    <entry name="GUI" path="gui/packageSpoofer.app" />
   </entryPoints>
 </plugin>

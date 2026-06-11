@@ -1,0 +1,107 @@
+name: Sync official plugins
+
+on:
+  repository_dispatch:
+    types: [sync-plugin]
+  workflow_dispatch:
+    inputs:
+      plugin_id:
+        description: Official plugin id (leave empty to sync all)
+        required: false
+        type: string
+      release_tag:
+        description: Optional release tag (e.g. v4.0)
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PowerShell
+        uses: PSModule/install-powershell@v1
+        with:
+          Version: '7.4.6'
+
+      - name: Resolve sync parameters
+        id: params
+        shell: pwsh
+        run: |
+          $pluginId = '${{ github.event.client_payload.plugin }}'
+          if ([string]::IsNullOrWhiteSpace($pluginId)) {
+            $pluginId = '${{ inputs.plugin_id }}'
+          }
+
+          $releaseTag = '${{ github.event.client_payload.version }}'
+          if ([string]::IsNullOrWhiteSpace($releaseTag)) {
+            $releaseTag = '${{ inputs.release_tag }}'
+          }
+
+          "plugin_id=$pluginId" >> $env:GITHUB_OUTPUT
+          "release_tag=$releaseTag" >> $env:GITHUB_OUTPUT
+
+      - name: Sync official plugin payloads
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $params = @{
+            RepoRoot = $PWD.Path
+          }
+          if (-not [string]::IsNullOrWhiteSpace('${{ steps.params.outputs.plugin_id }}')) {
+            $params.PluginId = '${{ steps.params.outputs.plugin_id }}'
+          }
+          if (-not [string]::IsNullOrWhiteSpace('${{ steps.params.outputs.release_tag }}')) {
+            $params.ReleaseTag = '${{ steps.params.outputs.release_tag }}'
+          }
+
+          & ./scripts/sync-official-plugins.ps1 @params
+
+      - name: Build pull request metadata
+        id: pr
+        shell: pwsh
+        run: |
+          if (-not (Test-Path sync-summary.json)) {
+            throw 'sync-summary.json was not created.'
+          }
+
+          $raw = Get-Content sync-summary.json -Raw | ConvertFrom-Json
+          $summary = if ($raw -is [System.Array]) { @($raw) } else { @($raw) }
+          $lines = $summary | ForEach-Object { "- $($_.PluginId) $($_.Version) ($($_.Asset))" }
+          $title = if ($summary.Count -eq 1) {
+            "Sync $($summary[0].PluginId) $($summary[0].Version)"
+          }
+          else {
+            "Sync official plugins ($($summary.Count))"
+          }
+
+          "title=$title" >> $env:GITHUB_OUTPUT
+          $body = @(
+            "Automated sync triggered by ``${{ github.event_name }}``.",
+            '',
+            "Plugin filter: ``${{ steps.params.outputs.plugin_id }}``",
+            "Release tag: ``${{ steps.params.outputs.release_tag }}``",
+            '',
+            ($lines -join "`n"),
+            '',
+            'GUI binaries are not committed. They are fetched during ``compile.ps1`` builds.'
+          ) -join "`n"
+          "body<<EOF`n$body`nEOF" >> $env:GITHUB_OUTPUT
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: sync/official-plugins-${{ github.run_id }}
+          delete-branch: true
+          title: ${{ steps.pr.outputs.title }}
+          commit-message: Sync official plugins from upstream releases
+          body: ${{ steps.pr.outputs.body }}
+          labels: dependencies,plugins

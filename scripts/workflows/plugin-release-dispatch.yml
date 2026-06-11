@@ -1,0 +1,25 @@
+# Copy this file to each official plugin repository as:
+#   .github/workflows/notify-reblock-sync.yml
+#
+# Required secret in the plugin repository:
+#   REBLOCK_SYNC_TOKEN - fine-grained PAT or classic token with
+#   "Contents: read" on the plugin repo and "Actions: write" on ReBlock.
+
+name: Notify ReBlock plugin sync
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger ReBlock sync
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.REBLOCK_SYNC_TOKEN }}
+          repository: yourworstnightmare1/reblock
+          event-type: sync-plugin
+          client-payload: >-
+            {"plugin":"REPLACE_PLUGIN_ID","version":"${{ github.event.release.tag_name }}"}
