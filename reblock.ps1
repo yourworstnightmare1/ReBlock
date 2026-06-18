@@ -684,15 +684,6 @@ function Show-PluginSettingsMenu {
     } while ($true)
 }
 
-function Test-PermissionPromptAllowed {
-    param (
-        [string]$Response
-    )
-
-    $normalized = $Response.Trim().ToLowerInvariant()
-    return $normalized -in @("y", "yes", "1")
-}
-
 function Wait-MenuContinue {
     param (
         [string]$Message = "Press Enter to continue..."
@@ -700,138 +691,6 @@ function Wait-MenuContinue {
 
     Write-Host ""
     $null = Read-Host $Message
-}
-
-function Get-PluginPermissionValue {
-    param (
-        [hashtable]$Settings,
-        [string]$Key,
-        [string]$Default = "1"
-    )
-
-    if ($null -eq $Settings) {
-        return $Default
-    }
-
-    if (-not $Settings.ContainsKey($Key)) {
-        return $Default
-    }
-
-    $value = [string]$Settings[$Key]
-    if ([string]::IsNullOrWhiteSpace($value)) {
-        return $Default
-    }
-
-    return $value.Trim()
-}
-
-function Resolve-PluginPermission {
-    param (
-        [string]$PluginName,
-        [string]$PermissionName,
-        [string]$Value,
-        [string]$Description,
-        [switch]$PersistOnFirstAllow,
-        [switch]$ConfirmLaunch
-    )
-
-    $normalizedValue = if ([string]::IsNullOrWhiteSpace($Value)) { "1" } else { $Value.Trim() }
-
-    switch ($normalizedValue) {
-        "0" { return $false }
-        "1" { return $true }
-        "2" {
-            if ($ConfirmLaunch) {
-                if ($PersistOnFirstAllow) {
-                    return "persist-allow"
-                }
-                return $true
-            }
-
-            $prompt = Read-Host "$PluginName needs $PermissionName. $Description Allow? (Y/N/1)"
-            $allowed = Test-PermissionPromptAllowed -Response $prompt
-            if ($allowed -and $PersistOnFirstAllow) {
-                return "persist-allow"
-            }
-            return $allowed
-        }
-        "3" {
-            if ($ConfirmLaunch) {
-                return $true
-            }
-
-            $prompt = Read-Host "$PluginName needs $PermissionName. $Description Allow? (Y/N/1)"
-            return (Test-PermissionPromptAllowed -Response $prompt)
-        }
-        default { return $false }
-    }
-}
-
-function Test-PluginLaunchPermissions {
-    param (
-        [object]$Plugin,
-        [hashtable]$Settings,
-        [switch]$ConfirmLaunch
-    )
-
-    if ($null -eq $Settings) {
-        $Settings = (Get-PluginSettings -Plugin $Plugin)['SettingValues']
-    }
-
-    $network = Resolve-PluginPermission `
-        -PluginName $Plugin.Name `
-        -PermissionName "network access" `
-        -Value (Get-PluginPermissionValue -Settings $Settings -Key "enableNetworkAccess" -Default "2") `
-        -Description "This lets the plugin reach update servers or online resources." `
-        -PersistOnFirstAllow `
-        -ConfirmLaunch:$ConfirmLaunch
-    if ($network -eq "persist-allow") {
-        $Settings['enableNetworkAccess'] = "1"
-        Save-PluginSettings -Plugin $Plugin -Settings $Settings
-        $network = $true
-    }
-    if (-not $network) {
-        Show-ErrorMessage -Message "ERROR: Plugin launch blocked by network access settings. Enable it in Plugin settings if this plugin needs network access."
-        return $false
-    }
-
-    $fileAccess = Resolve-PluginPermission `
-        -PluginName $Plugin.Name `
-        -PermissionName "file access outside its folder" `
-        -Value (Get-PluginPermissionValue -Settings $Settings -Key "enableFileAccess" -Default "1") `
-        -Description "This plugin needs to read or modify files outside its own directory." `
-        -PersistOnFirstAllow `
-        -ConfirmLaunch:$ConfirmLaunch
-    if ($fileAccess -eq "persist-allow") {
-        $Settings['enableFileAccess'] = "1"
-        Save-PluginSettings -Plugin $Plugin -Settings $Settings
-        $fileAccess = $true
-    }
-    if (-not $fileAccess) {
-        Show-ErrorMessage -Message "ERROR: Plugin launch blocked by file access settings. Enable it in Plugin settings if this plugin needs file access."
-        return $false
-    }
-
-    $rootAccessValue = Get-PluginPermissionValue -Settings $Settings -Key "enableRootAccess" -Default "0"
-    if ($rootAccessValue -in @("2", "3")) {
-        $rootAccess = Resolve-PluginPermission `
-            -PluginName $Plugin.Name `
-            -PermissionName "administrator / elevated access" `
-            -Value $rootAccessValue `
-            -Description "This plugin may need elevated permissions to complete its task." `
-            -PersistOnFirstAllow:($rootAccessValue -eq "2") `
-            -ConfirmLaunch:$ConfirmLaunch
-        if ($rootAccess -eq "persist-allow") {
-            $Settings['enableRootAccess'] = "1"
-            Save-PluginSettings -Plugin $Plugin -Settings $Settings
-        }
-        elseif (-not $rootAccess) {
-            Show-ErrorMessage -Message "ERROR: Plugin launch blocked by administrator access settings."
-            return $false
-        }
-    }
-
-    return $true
 }
 
 function Get-PluginLaunchArguments {
@@ -1560,7 +1419,18 @@ function Show-PluginActionMenu {
 
         switch ($action) {
             "1" {
-                if (-not (Test-PluginLaunchPermissions -Plugin $Plugin -Settings $Settings -ConfirmLaunch)) {
+                if (-not (Confirm-PluginSecurityDefaults -Plugin $Plugin -Settings $Settings)) {
+                    Wait-MenuContinue
+                    break
+                }
+
+                $securityDefaultsConfirmed = Test-PluginSecurityDefaultsConfirmed -Plugin $Plugin
+                $launchPermissionArgs = @{
+                    Plugin = $Plugin
+                    Settings = $Settings
+                    SecurityDefaultsConfirmed = $securityDefaultsConfirmed
+                }
+                if (-not (Test-PluginLaunchPermissions @launchPermissionArgs)) {
                     Wait-MenuContinue
                     break
                 }
@@ -1844,6 +1714,12 @@ function Show-MainMenu {
     Write-Host "[5] Exit"
     Write-Host ""
 }
+
+$pluginSecurityScript = Join-Path $appRoot 'scripts\PluginSecurity.ps1'
+if (-not (Test-Path -LiteralPath $pluginSecurityScript)) {
+    throw "Plugin security module not found: $pluginSecurityScript"
+}
+. $pluginSecurityScript
 
 $pluginsRoot = Join-Path $appRoot "plugins"
 

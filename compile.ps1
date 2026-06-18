@@ -132,7 +132,10 @@ function Invoke-WindowsPackaging {
     }
 
     New-Item -ItemType Directory -Path $appRoot -Force | Out-Null
+    $scriptsDest = Join-Path $appRoot "scripts"
+    New-Item -ItemType Directory -Path $scriptsDest -Force | Out-Null
     Copy-IfExists -Source (Join-Path $RepoRoot "reblock.ps1") -Destination $appRoot
+    Copy-IfExists -Source (Join-Path $RepoRoot "scripts\PluginSecurity.ps1") -Destination $scriptsDest
     Copy-IfExists -Source (Join-Path $RepoRoot "version.txt") -Destination $appRoot
     Copy-IfExists -Source (Join-Path $RepoRoot "settings.txt") -Destination $appRoot
     Copy-IfExists -Source (Join-Path $RepoRoot "plugins") -Destination $appRoot
@@ -211,7 +214,10 @@ function Invoke-MacOSPackaging {
     New-Item -ItemType Directory -Path (Join-Path $appRoot "Contents/MacOS") -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $appRoot "Contents/Resources") -Force | Out-Null
 
+    $payloadScriptsDest = Join-Path $payloadRoot "scripts"
+    New-Item -ItemType Directory -Path $payloadScriptsDest -Force | Out-Null
     Copy-IfExists -Source (Join-Path $RepoRoot "reblock.ps1") -Destination $payloadRoot
+    Copy-IfExists -Source (Join-Path $RepoRoot "scripts\PluginSecurity.ps1") -Destination $payloadScriptsDest
     Copy-IfExists -Source (Join-Path $RepoRoot "version.txt") -Destination $payloadRoot
     Copy-IfExists -Source (Join-Path $RepoRoot "settings.txt") -Destination $payloadRoot
     Copy-IfExists -Source (Join-Path $RepoRoot "plugins") -Destination $payloadRoot

@@ -31,3 +31,6 @@ sync-summary.json
 example-settings-api.txt
 example-settings.txt
 example-settings-api.txt
+
+# ReBlock per-plugin first-launch security review markers
+plugins/**/.reblock-security-confirmed
