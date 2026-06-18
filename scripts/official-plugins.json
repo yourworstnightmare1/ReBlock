@@ -53,7 +53,7 @@
     {
       "id": "hiddenfiles",
       "folder": "hiddenfiles",
-      "repo": "yourworstnightmare1/hiddenfiles",
+      "repo": "yourworstnightmare1/hiddenFiles",
       "syncMode": "branch",
       "branch": "main",
       "syncFiles": ["hiddenfiles.ps1", "version.txt"],

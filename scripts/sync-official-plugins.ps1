@@ -29,15 +29,34 @@ else {
 foreach ($plugin in $targets) {
     Write-Host "Syncing $($plugin.id)..."
 
-    $result = if ($plugin.syncMode -eq 'branch') {
-        Sync-OfficialPluginFromBranch -PluginDefinition $plugin -PluginsRoot $pluginsRoot
-    }
-    else {
-        Sync-OfficialPluginFromRelease -PluginDefinition $plugin -PluginsRoot $pluginsRoot -Tag $ReleaseTag
-    }
+    try {
+        $result = if ($plugin.syncMode -eq 'branch') {
+            Sync-OfficialPluginFromBranch -PluginDefinition $plugin -PluginsRoot $pluginsRoot
+        }
+        else {
+            Sync-OfficialPluginFromRelease -PluginDefinition $plugin -PluginsRoot $pluginsRoot -Tag $ReleaseTag
+        }
 
-    $results.Add($result) | Out-Null
-    Write-Host "Synced $($result.PluginId) -> $($result.Version) ($($result.Asset))"
+        $results.Add($result) | Out-Null
+        Write-Host "Synced $($result.PluginId) -> $($result.Version) ($($result.Asset))"
+    }
+    catch {
+        $isOptional = $false
+        if ($null -ne $plugin.optional) {
+            $isOptional = [bool]$plugin.optional
+        }
+
+        if ($isOptional) {
+            Write-Warning "Skipped optional plugin $($plugin.id): $($_.Exception.Message)"
+            continue
+        }
+
+        throw
+    }
+}
+
+if ($results.Count -eq 0) {
+    throw 'No plugins were synced.'
 }
 
 $summaryPath = Join-Path $RepoRoot 'sync-summary.json'

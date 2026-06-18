@@ -9,28 +9,11 @@ NC='\033[0m'
 # To apply colors use echo -e
 # Make sure to remove colors with ${NC}
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_BINARY_PATCH=0
-SETTINGS_FILE="$SCRIPT_DIR/../settings.txt"
-if [[ -f "$SETTINGS_FILE" ]]; then
-    while IFS= read -r line; do
-        [[ "$line" =~ ^[[:space:]]*# ]] && continue
-        [[ -z "$line" ]] && continue
-        if [[ "$line" =~ ^[[:space:]]*([^=]+)=(.*)$ ]]; then
-            key="$(echo "${BASH_REMATCH[1]}" | xargs)"
-            value="$(echo "${BASH_REMATCH[2]}" | xargs)"
-            if [[ "$key" == "defaultBinaryPatch" ]]; then
-                DEFAULT_BINARY_PATCH="$value"
-            fi
-        fi
-    done < "$SETTINGS_FILE"
-fi
-
 clear
 # Selection
 
 
- read -r -p "Enter the directory of your app: " name
+ read -p "Enter the directory of your app: " name
  name="${name%\"}"; name="${name#\"}"
  name="${name%\'}"; name="${name#\'}"
  name="${name%/}"
@@ -39,22 +22,18 @@ clear
     name="$(dirname "$(dirname "$name")")"
  fi
 
- read -r -p "Enter the new package identifier (it can be random characters, has to start with com.) (e.g., com.example.app): " identifier
+ read -p "Enter the new package identifier (it can be random characters, has to start with com.) (e.g., com.example.app): " identifier
  echo "Pre-Patch Scripts:"
- read -r -p "(Not required) Would you like to apply framework patches? (May break some apps) [y/n]: " frameworkChoice
- if [[ "$DEFAULT_BINARY_PATCH" == "1" ]]; then
-     patchChoice="y"
- else
-     read -r -p "(Not required) Would you like to apply binary patches? (fixes crashes with some apps) [y/n]: " patchChoice
- fi
+ read -p "(Not required) Would you like to apply framework patches? (May break some apps) [y/n]: " frameworkChoice
+ read -p "(Not required) Would you like to apply binary patches? (fixes crashes with some apps) [y/n]: " patchChoice
  echo "Post-Patch Scripts:"
- read -r -p "(Not required) Would you like to apply appUnblocker? (Wraps the app in a new .app bundle and adds a launch shortcut symlink beside it.) [y/n]: " appUnblockerChoice
- read -r -p "(Not required) Would you like to hide the file after signing? (Marks the app (and launch shortcut, if created) as hidden in Finder after signing.) [y/n]: " hideFileAfterSigningChoice
+ read -p "(Not required) Would you like to apply appUnblocker? (Wraps the app in a new .app bundle and adds a launch shortcut symlink beside it.) [y/n]: " appUnblockerChoice
+ read -p "(Not required) Would you like to hide the file after signing? (Marks the app (and launch shortcut, if created) as hidden in Finder after signing.) [y/n]: " hideFileAfterSigningChoice
  echo ""
 
  if [ -z "$name" ] || [ -z "$identifier" ]; then
      echo -e "${RED}Error: App directory and package identifier are required.${NC}"
-     read -r -p "Press any key to restart..."
+     read -p "Press any key to restart..."
      exit 1
  fi
  if [ "$patchChoice" == "y" ] || [ "$patchChoice" == "Y" ]; then
@@ -109,7 +88,7 @@ echo "Apply AppUnblocker: $appUnblockerChoice"
 echo "Hide File After Signing: $hideFileAfterSigningChoice"
 echo ""
 echo -e "${BOLD}Custom plist directories will be available in the next version of packageSpoofer, give it some time...${NC}"
-read -r -p "Press any key to confirm and proceed..." -n1 -s
+read -p "Press any key to confirm and proceed..." -n1 -s
 
 #####################
 ### Exploit Begin ###
@@ -126,17 +105,18 @@ echo -e "///////////////////////////////////"
 
 if [ ! -d "$name" ]; then
     echo -e "${RED}Error: App bundle not found at $name${NC}"
-    read -r -p "Press any key to exit..."
+    read -p "Press any key to exit..."
     exit 1
 fi
 
 volume_path=$(df "$name" | awk 'NR==2 {print $NF}')
-if /sbin/mount | grep " on ${volume_path} " | grep -q "read-only"; then
+volume_name=$(basename "$volume_path")
+if mount | grep " on ${volume_path} " | grep -q "read-only"; then
     echo -e "${RED}This is a read-only volume. packageSpoofer cannot use this volume.${NC}"
     echo ""
     echo "If you are trying to install an app from a .dmg file, move the app from the .dmg to any location on your system, then click \"Browse...\" in the app and select the app."
     echo ""
-    read -r -p "Press any key to exit..."
+    read -p "Press any key to exit..."
     exit 1
 fi
 
@@ -145,7 +125,7 @@ if ! touch "$write_test_file" 2>/dev/null; then
     echo -e "${RED}Error: The app is not writable at $name${NC}"
     echo -e "${YELLOW}Copy the app to a writable folder (for example ~/Downloads) and try again.${NC}"
     echo -e "${YELLOW}Example: cp -R \"$name\" ~/Downloads/${NC}"
-    read -r -p "Press any key to exit..."
+    read -p "Press any key to exit..."
     exit 1
 fi
 rm -f "$write_test_file"
@@ -157,9 +137,10 @@ if [ "$frameworkChoice" == "y" ] || [ "$frameworkChoice" == "Y" ]; then
   frameworksPath="$patch_app/Contents/Frameworks"
   if [ -d "$frameworksPath" ]; then
       echo -e "${YELLOW}rm -rf $frameworksPath${NC}"
-      if ! rm -rf "$frameworksPath"; then
+      rm -rf "$frameworksPath"
+      if [ $? -ne 0 ]; then
           echo -e "${RED}Error: Failed to remove frameworks.${NC}"
-          read -r -p "Press any key to exit..."
+          read -p "Press any key to exit..."
           exit 1
       fi
       echo -e "${GREEN}Frameworks removed successfully.${NC}"
@@ -170,19 +151,21 @@ fi
 if [ "$patchChoice" == "y" ] || [ "$patchChoice" == "Y" ]; then
     echo -e "${BOLD}[Pre-Patch] Applying binary fix...${NC}"
     echo -e "${YELLOW}chmod: add execute permission: $patch_app/Contents/MacOS/*${NC}"
-    if ! chmod +x "$patch_app"/Contents/MacOS/* 2>/dev/null; then
+    chmod +x "$patch_app"/Contents/MacOS/* 2>/dev/null
+    if [ $? -ne 0 ]; then
         echo -e "${RED}Error: Failed to set executable permissions.${NC}"
-        read -r -p "Press any key to exit..."
+        read -p "Press any key to exit..."
         exit 1
     fi
     echo -e "${GREEN}Binary fix applied successfully.${NC}"
 fi
 
 echo "Editing Info.plist..."
-echo -e "${YELLOW}Edit ${pname}: replace CFBundleIdentifier: string=${identifier}${NC}"
-if ! plutil -replace CFBundleIdentifier -string "$identifier" "$pname"; then
+echo -e "${YELLOW}Edit $pname: replace CFBundleIdentifier: string="$identifier"${NC}"
+plutil -replace CFBundleIdentifier -string "$identifier" "$pname"
+if [ $? -ne 0 ]; then
     echo -e "${RED}Error: Failed to edit Info.plist: It is missing or corrupt.${NC}"
-    read -r -p "Press any key to exit..."
+    read -p "Press any key to exit..."
     exit 1
 fi
 echo -e "${GREEN}Info.plist edited successfully.${NC}"
@@ -190,10 +173,11 @@ echo -e "${GREEN}Info.plist edited successfully.${NC}"
 # Signing process
 echo -e "${BOLD}Signing application...${NC}"
 echo -e "${YELLOW}codesign: Signing application using ad-hoc signature: $patch_app${NC}"
-if ! codesign --force --deep --sign - "$patch_app"; then
+codesign --force --deep --sign - "$patch_app"
+if [ $? -ne 0 ]; then
     echo -e "${RED}Error: Code signing failed: The file may be corrupt or in a protected directory.${NC}"
     echo -e "${YELLOW}If you recieved the error "bundle format is ambiguous could be app or framework", the signing succeeded but there may be additional issues (likely does not affect the function of the app).${NC}"
-    read -r -p "Press any key to exit..."
+    read -p "Press any key to exit..."
     exit 1
 fi
 echo -e "${GREEN}Application signed successfully.${NC}"
@@ -209,11 +193,11 @@ if [ "$appUnblockerChoice" == "y" ] || [ "$appUnblockerChoice" == "Y" ]; then
     else
         echo -e "${YELLOW}appUnblocker: Creating folder at $parent_dir/appUnblocker-$(uuidgen)${NC}"
         temp_dir="$parent_dir/appUnblocker-$(uuidgen)"
-        mkdir "$temp_dir" || { echo -e "${RED}Error: Failed to create appUnblocker folder.${NC}"; read -r -p "Press any key to exit..."; exit 1; }
+        mkdir "$temp_dir" || { echo -e "${RED}Error: Failed to create appUnblocker folder.${NC}"; read -p "Press any key to exit..."; exit 1; }
 
         echo -e "${YELLOW}appUnblocker: Moving app into wrapper...${NC}"
-        mv "$patch_app" "$temp_dir/$app_name" || { rm -rf "$temp_dir"; echo -e "${RED}Error: Failed to move app into wrapper.${NC}"; read -r -p "Press any key to exit..."; exit 1; }
-        mv "$temp_dir" "$name" || { echo -e "${RED}Error: Failed to finalize wrapper.${NC}"; read -r -p "Press any key to exit..."; exit 1; }
+        mv "$patch_app" "$temp_dir/$app_name" || { rm -rf "$temp_dir"; echo -e "${RED}Error: Failed to move app into wrapper.${NC}"; read -p "Press any key to exit..."; exit 1; }
+        mv "$temp_dir" "$name" || { echo -e "${RED}Error: Failed to finalize wrapper.${NC}"; read -p "Press any key to exit..."; exit 1; }
 
         nested_app="$name/$app_name"
         wrapper_path="$name"
@@ -239,12 +223,13 @@ if [ "$appUnblockerChoice" == "y" ] || [ "$appUnblockerChoice" == "Y" ]; then
         echo -e "${GREEN}Launch shortcut created at $shortcut_path${NC}"
     else
         echo -e "${RED}Error: Failed to create launch shortcut.${NC}"
-        read -r -p "Press any key to exit..."
+        read -p "Press any key to exit..."
         exit 1
     fi
 
     echo -e "${YELLOW}codesign: Re-signing nested app after appUnblocker...${NC}"
-    if ! codesign --force --deep --sign - "$nested_app"; then
+    codesign --force --deep --sign - "$nested_app"
+    if [ $? -ne 0 ]; then
         echo -e "${YELLOW}WARN: Could not re-sign nested app (the app may still run).${NC}"
     else
         echo -e "${GREEN}Nested app signed successfully.${NC}"
@@ -367,7 +352,7 @@ fi
 
 echo -e "${GREEN}Successfully finished running packageSpoofer.${NC}"
 
-read -r -p "Press any key to exit packageSpoofer..."
+read -p "Press any key to exit packageSpoofer..."
 
 ###################
 ### Exploit End ###

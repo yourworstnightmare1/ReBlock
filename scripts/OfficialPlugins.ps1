@@ -1,3 +1,5 @@
+#Requires -Version 5.1
+
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
@@ -168,7 +170,8 @@ function Set-PluginVersionFiles {
     $pluginXmlPath = Join-Path $PluginDirectory 'plugin.xml'
     if (Test-Path -LiteralPath $pluginXmlPath) {
         $xml = Get-Content -LiteralPath $pluginXmlPath -Raw -Encoding UTF8
-        $updated = [regex]::Replace($xml, '(<version>)[^<]*(</version>)', "`${1}$VersionText`${2}", 1)
+        $replacement = '$1' + $VersionText + '$2'
+        $updated = [regex]::Replace($xml, '(<version>)[^<]*(</version>)', $replacement, 1)
         Set-Content -LiteralPath $pluginXmlPath -Value $updated -Encoding UTF8 -NoNewline
     }
 }
@@ -237,6 +240,44 @@ function Import-ReleaseAssetToPlugin {
     }
 }
 
+function Backup-PluginPreserveFiles {
+    param (
+        [string]$PluginDirectory,
+        [string[]]$Preserve
+    )
+
+    $backups = @{}
+    foreach ($relativePath in $Preserve) {
+        if ([string]::IsNullOrWhiteSpace($relativePath)) {
+            continue
+        }
+
+        $path = Join-Path $PluginDirectory $relativePath
+        if (Test-Path -LiteralPath $path) {
+            $backups[$relativePath] = Get-Content -LiteralPath $path -Raw -Encoding UTF8
+        }
+    }
+
+    return $backups
+}
+
+function Restore-PluginPreserveFiles {
+    param (
+        [string]$PluginDirectory,
+        [hashtable]$Backups
+    )
+
+    foreach ($relativePath in $Backups.Keys) {
+        $destination = Join-Path $PluginDirectory $relativePath
+        $parent = Split-Path -Parent $destination
+        if (-not [string]::IsNullOrWhiteSpace($parent) -and -not (Test-Path -LiteralPath $parent)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+
+        Set-Content -LiteralPath $destination -Value $Backups[$relativePath] -Encoding UTF8 -NoNewline
+    }
+}
+
 function Sync-OfficialPluginFromRelease {
     param (
         [object]$PluginDefinition,
@@ -254,7 +295,11 @@ function Sync-OfficialPluginFromRelease {
     New-Item -ItemType Directory -Path $pluginDirectory -Force | Out-Null
 
     $preserve = @($PluginDefinition.preserve)
+    $preserveBackups = Backup-PluginPreserveFiles -PluginDirectory $pluginDirectory -Preserve $preserve
     Import-ReleaseAssetToPlugin -Asset $asset -PluginDirectory $pluginDirectory -Preserve $preserve -Flatten
+    if ($preserveBackups.Count -gt 0) {
+        Restore-PluginPreserveFiles -PluginDirectory $pluginDirectory -Backups $preserveBackups
+    }
 
     $versionText = ConvertTo-PluginVersionText -TagName $release.tag_name
     Set-PluginVersionFiles -PluginDirectory $pluginDirectory -VersionText $versionText
@@ -264,6 +309,54 @@ function Sync-OfficialPluginFromRelease {
         Version = $versionText
         Tag = $release.tag_name
         Asset = $asset.name
+    }
+}
+
+function Sync-OfficialPluginBranchPayload {
+    param (
+        [object]$PluginDefinition,
+        [string]$RepoRootPath,
+        [string]$PluginsRoot,
+        [string]$Branch
+    )
+
+    $pluginDirectory = Join-Path $PluginsRoot $PluginDefinition.folder
+    New-Item -ItemType Directory -Path $pluginDirectory -Force | Out-Null
+
+    $preservePaths = @($PluginDefinition.preserve)
+    $preserveBackups = Backup-PluginPreserveFiles -PluginDirectory $pluginDirectory -Preserve $preservePaths
+
+    foreach ($relativePath in $PluginDefinition.syncFiles) {
+        $source = Join-Path $RepoRootPath $relativePath
+        if (-not (Test-Path -LiteralPath $source)) {
+            throw "Expected file '$relativePath' was not found in $($PluginDefinition.repo) ($Branch)."
+        }
+
+        $destination = Join-Path $pluginDirectory $relativePath
+        $parent = Split-Path -Parent $destination
+        if (-not (Test-Path -LiteralPath $parent)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+        }
+        Copy-Item -LiteralPath $source -Destination $destination -Force
+    }
+
+    if ($preserveBackups.Count -gt 0) {
+        Restore-PluginPreserveFiles -PluginDirectory $pluginDirectory -Backups $preserveBackups
+    }
+
+    $versionPath = Join-Path $pluginDirectory 'version.txt'
+    $versionText = 'unknown'
+    if (Test-Path -LiteralPath $versionPath) {
+        $versionText = (Get-Content -LiteralPath $versionPath -TotalCount 1).Trim()
+    }
+
+    Set-PluginVersionFiles -PluginDirectory $pluginDirectory -VersionText $versionText
+
+    return [PSCustomObject]@{
+        PluginId = $PluginDefinition.id
+        Version = $versionText
+        Tag = $Branch
+        Asset = 'branch'
     }
 }
 
@@ -303,39 +396,13 @@ function Sync-OfficialPluginFromBranch {
             throw "Branch archive for $($PluginDefinition.id) did not contain a root directory."
         }
 
-        $pluginDirectory = Join-Path $PluginsRoot $PluginDefinition.folder
-        New-Item -ItemType Directory -Path $pluginDirectory -Force | Out-Null
-
-        foreach ($relativePath in @($PluginDefinition.syncFiles)) {
-            $source = Join-Path $repoRoot.FullName $relativePath
-            if (-not (Test-Path -LiteralPath $source)) {
-                throw "Expected file '$relativePath' was not found in $($PluginDefinition.repo)@$branch."
-            }
-
-            $destination = Join-Path $pluginDirectory $relativePath
-            $parent = Split-Path -Parent $destination
-            if (-not (Test-Path -LiteralPath $parent)) {
-                New-Item -ItemType Directory -Path $parent -Force | Out-Null
-            }
-            Copy-Item -LiteralPath $source -Destination $destination -Force
+        $payloadArgs = @{
+            PluginDefinition = $PluginDefinition
+            RepoRootPath = $repoRoot.FullName
+            PluginsRoot = $PluginsRoot
+            Branch = $branch
         }
-
-        $versionPath = Join-Path $pluginDirectory 'version.txt'
-        $versionText = if (Test-Path -LiteralPath $versionPath) {
-            (Get-Content -LiteralPath $versionPath -TotalCount 1).Trim()
-        }
-        else {
-            'unknown'
-        }
-
-        Set-PluginVersionFiles -PluginDirectory $pluginDirectory -VersionText $versionText
-
-        return [PSCustomObject]@{
-            PluginId = $PluginDefinition.id
-            Version = $versionText
-            Tag = $branch
-            Asset = 'branch'
-        }
+        return Sync-OfficialPluginBranchPayload @payloadArgs
     }
     finally {
         if (Test-Path -LiteralPath $tempRoot) {

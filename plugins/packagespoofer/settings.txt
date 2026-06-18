@@ -1,8 +1,8 @@
 # Plugin settings config
 # packageSpoofer
-defaultBinaryPatch=0
+skipBanner=0
 # 0 = disabled (default), 1 = enabled
-# Applies the binary patch automatically by default when using the CLI edition.
+# Skips the ASCII banner when the plugin launches.
 
 # Updater
 updaterUrlStable=https://api.github.com/repos/yourworstnightmare1/packageSpoofer/releases/latest
